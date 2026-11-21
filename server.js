@@ -37,21 +37,47 @@ async function createHyperbeamSession(startUrl = "https://www.google.com") {
     );
   }
 
-  const response = await fetch("https://engine.hyperbeam.com/v0/vm", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${HYPERBEAM_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      start_url: startUrl,
-      ublock: true, // Auto-enables uBlock Origin to kill movie site popups/ads!
-      kiosk: false, // Allows full browser UI (URL bar, navigation, tabs)
-      timeout: {
-        offline: 1800, // Terminate if no users connected for 30 minutes
+  async function requestVm() {
+    return await fetch("https://engine.hyperbeam.com/v0/vm", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${HYPERBEAM_API_KEY}`,
+        "Content-Type": "application/json",
       },
-    }),
-  });
+      body: JSON.stringify({
+        start_url: startUrl,
+        ublock: true, // Auto-enables uBlock Origin to kill movie site popups/ads!
+        kiosk: false, // Allows full browser UI (URL bar, navigation, tabs)
+        timeout: {
+          offline: 180, // Terminate after 3 minutes if no users are connected
+        },
+      }),
+    });
+  }
+
+  let response = await requestVm();
+
+  // If hitting concurrency limit (too many VMs on test tier), clean up stale sessions and retry
+  if (!response.ok && (response.status === 400 || response.status === 429)) {
+    console.warn("VM creation hit limit, cleaning up stale sessions...");
+    try {
+      const listRes = await fetch("https://engine.hyperbeam.com/v0/vm", {
+        headers: { Authorization: `Bearer ${HYPERBEAM_API_KEY}` },
+      });
+      if (listRes.ok) {
+        const listData = await listRes.json();
+        const activeVms = listData.results || [];
+        for (const vm of activeVms) {
+          await deleteHyperbeamSession(vm.id);
+        }
+        // Small delay and retry
+        await new Promise((r) => setTimeout(r, 1000));
+        response = await requestVm();
+      }
+    } catch (cleanupErr) {
+      console.warn("Cleanup error:", cleanupErr.message);
+    }
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -59,6 +85,21 @@ async function createHyperbeamSession(startUrl = "https://www.google.com") {
   }
 
   return await response.json();
+}
+
+async function deleteHyperbeamSession(sessionId) {
+  if (!sessionId || !HYPERBEAM_API_KEY) return;
+  try {
+    const res = await fetch(`https://engine.hyperbeam.com/v0/vm/${sessionId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${HYPERBEAM_API_KEY}` },
+    });
+    if (res.ok) {
+      console.log(`Cleaned up stale VM session: ${sessionId}`);
+    }
+  } catch (err) {
+    console.warn("Could not delete session:", err.message);
+  }
 }
 
 // Generate friendly room code (e.g. "cine-a8f3b2")
@@ -181,7 +222,7 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("disconnect", () => {
+  socket.on("disconnect", async () => {
     if (currentRoomId && rooms.has(currentRoomId)) {
       const room = rooms.get(currentRoomId);
       room.participants.delete(socket.id);
@@ -195,6 +236,13 @@ io.on("connection", (socket) => {
           text: `${currentUser.username} left the party.`,
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         });
+      }
+
+      // If room is now empty, immediately terminate the VM to free up slots
+      if (room.participants.size === 0) {
+        console.log(`Room ${currentRoomId} is empty. Terminating VM to free up capacity...`);
+        rooms.delete(currentRoomId);
+        await deleteHyperbeamSession(room.sessionId);
       }
     }
   });
