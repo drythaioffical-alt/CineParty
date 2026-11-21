@@ -29,11 +29,15 @@ const controlModeGroup = document.getElementById("controlModeGroup");
 const controlToggleBtn = document.getElementById("controlToggleBtn");
 const controlModeText = document.getElementById("controlModeText");
 const fullscreenBtn = document.getElementById("fullscreenBtn");
+const reloadStreamBtn = document.getElementById("reloadStreamBtn");
 const toggleChatBtn = document.getElementById("toggleChatBtn");
 const unreadBadge = document.getElementById("unreadBadge");
 const leaveRoomBtn = document.getElementById("leaveRoomBtn");
 
 const hbContainer = document.getElementById("hyperbeamContainer");
+const hbMount = document.getElementById("hbMount");
+const clickToPlayOverlay = document.getElementById("clickToPlayOverlay");
+const resumeStreamBtn = document.getElementById("resumeStreamBtn");
 const browserLoader = document.getElementById("browserLoader");
 const chatSidebar = document.getElementById("chatSidebar");
 const closeSidebarBtn = document.getElementById("closeSidebarBtn");
@@ -544,30 +548,43 @@ async function enterRoom(roomId, embedUrl, adminToken, isHost) {
   // Connect Socket.io
   initSocket(roomId, currentUser.username, isHost);
 
-  // Initialize Hyperbeam Virtual Browser inside #hyperbeamContainer
+  // Initialize Hyperbeam Virtual Browser inside #hbMount
   try {
     // Clear previous instance if any
     if (hbInstance) {
-      hbInstance.destroy();
+      try { hbInstance.destroy(); } catch {}
       hbInstance = null;
     }
 
-    // Keep loader element while Hyperbeam mounts inside container
-    const hbWrapper = document.createElement("div");
-    hbWrapper.style.width = "100%";
-    hbWrapper.style.height = "100%";
-    hbContainer.appendChild(hbWrapper);
+    // Clean previous elements from mount container
+    hbMount.innerHTML = "";
+    clickToPlayOverlay.classList.add("hidden");
+    browserLoader.classList.remove("hidden");
 
-    hbInstance = await Hyperbeam(hbWrapper, embedUrl, {
+    hbInstance = await Hyperbeam(hbMount, embedUrl, {
       adminToken: adminToken || undefined,
       volume: 1.0,
       delegate: true, // Allows mouse/keyboard input
+      playoutDelay: true, // Smoother playback & prevents dropped frames / black screen on second devices
+      timeout: 30000,
+      onConnectionStateChange: (state) => {
+        console.log("Hyperbeam stream connection state:", state);
+        if (state === "connected" || state === "playing") {
+          browserLoader.classList.add("hidden");
+          clickToPlayOverlay.classList.add("hidden");
+        }
+      },
     });
 
-    // Hide loader once connected
+    // Check after mount if browser autoplay policy blocked the video element
     setTimeout(() => {
       browserLoader.classList.add("hidden");
-    }, 1000);
+      const videoEl = hbMount.querySelector("video");
+      if (videoEl && videoEl.paused) {
+        console.warn("Autoplay blocked by browser policy. Displaying resume overlay.");
+        clickToPlayOverlay.classList.remove("hidden");
+      }
+    }, 1200);
 
     showToast("🎉 Connected to virtual browser!");
   } catch (err) {
@@ -580,6 +597,25 @@ async function enterRoom(roomId, embedUrl, adminToken, isHost) {
     `;
   }
 }
+
+// User-activation unblock for browser autoplay policies
+resumeStreamBtn.addEventListener("click", () => {
+  clickToPlayOverlay.classList.add("hidden");
+  if (hbInstance) {
+    hbInstance.volume = 1.0;
+  }
+  const videoEl = hbMount.querySelector("video");
+  if (videoEl) {
+    videoEl.play().catch(() => {});
+  }
+});
+
+// Quick 1-click Reload Stream button in navbar
+reloadStreamBtn.addEventListener("click", () => {
+  if (!currentRoom) return;
+  showToast("🔄 Reconnecting video stream...");
+  enterRoom(currentRoom.roomId, currentRoom.embedUrl, currentRoom.adminToken, currentRoom.isHost);
+});
 
 // SOCKET.IO REALTIME CHAT & USERS
 function initSocket(roomId, username, isHost) {

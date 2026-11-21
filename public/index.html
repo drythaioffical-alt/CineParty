@@ -111,6 +111,7 @@
       </div>
 
       <div class="navbar-right">
+        <button id="reloadStreamBtn" class="icon-btn" title="Reload Video Stream">🔄</button>
         <button id="fullscreenBtn" class="icon-btn" title="Toggle Fullscreen">⛶</button>
         <button id="toggleChatBtn" class="icon-btn active" title="Toggle Chat Sidebar">💬 <span id="unreadBadge" class="badge-dot hidden"></span></button>
         <button id="leaveRoomBtn" class="danger-btn small-btn">Leave</button>
@@ -123,11 +124,19 @@
       <!-- Virtual Browser Cinema Viewport -->
       <main class="cinema-container">
         <div id="hyperbeamContainer" class="hb-viewport">
+          <!-- Dedicated Mount Point for Hyperbeam -->
+          <div id="hbMount" class="hb-mount-layer"></div>
+
+          <!-- Click to Unmute/Play Overlay (if browser blocks autoplay) -->
+          <div id="clickToPlayOverlay" class="click-to-play-overlay hidden">
+            <button id="resumeStreamBtn" class="primary-btn">▶ Click to Resume Video</button>
+          </div>
+
           <!-- Loading Screen Overlay -->
           <div id="browserLoader" class="browser-loader">
             <div class="loader-spinner"></div>
             <h3>Connecting to Virtual Browser...</h3>
-            <p>Spinning up your ad-blocked private browser container.</p>
+            <p>Connecting to synchronized video stream...</p>
           </div>
         </div>
       </main>

@@ -548,11 +548,43 @@ input:focus {
   width: 100%;
   height: 100%;
   position: relative;
+  background: #000;
+  overflow: hidden;
 }
 
-.hb-viewport > * {
+.hb-mount-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100% !important;
   height: 100% !important;
+  display: block;
+}
+
+/* Ensure Hyperbeam injected elements fill the screen without letterboxing collapse */
+.hb-mount-layer *,
+.hb-mount-layer video,
+.hb-mount-layer canvas,
+.hb-mount-layer iframe {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+  display: block !important;
+}
+
+/* Click to play overlay when browser blocks WebRTC video autoplay */
+.click-to-play-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 6;
 }
 
 /* Browser Loader */
