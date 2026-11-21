@@ -177,16 +177,16 @@
     </div>
   </div>
 
-  <!-- Active Room Recovery Modal -->
+  <!-- Active Room Recovery Modal (Cross-device aware) -->
   <div id="activeRoomModal" class="modal-overlay hidden">
     <div class="modal-card">
       <div class="modal-icon">🍿</div>
-      <h3>Existing Party Found</h3>
-      <p>You have an active watch party running (<span id="modalRoomCode" class="modal-code">cine-xxxxxx</span>).</p>
+      <h3 id="modalTitle">Party Already Live!</h3>
+      <p id="modalDesc">Room <span id="modalRoomCode" class="modal-code">7K4M</span> is currently active. Would you like to join it?</p>
       <div class="modal-actions">
-        <button id="rejoinActiveRoomBtn" class="primary-btn full-width">▶ Rejoin Existing Room</button>
-        <button id="closeOldAndCreateBtn" class="danger-btn full-width" style="margin-top: 8px;">🗑 Close Old & Start Fresh</button>
-        <button id="cancelModalBtn" class="link-btn" style="margin-top: 6px;">Dismiss</button>
+        <button id="rejoinActiveRoomBtn" class="primary-btn full-width">🍿 Join This Active Party</button>
+        <button id="closeOldAndCreateBtn" class="secondary-btn full-width" style="margin-top: 6px;">🗑 Close & Start New Room</button>
+        <button id="cancelModalBtn" class="link-btn" style="margin-top: 4px;">Cancel</button>
       </div>
     </div>
   </div>

@@ -113,10 +113,35 @@ function generateRoomCode() {
   return code;
 }
 
+// REST: Check if an active room already exists (cross-device detection)
+app.get("/api/active-room", (req, res) => {
+  if (rooms.size > 0) {
+    const activeRoom = Array.from(rooms.values())[0];
+    return res.json({
+      hasActive: true,
+      roomId: activeRoom.roomId,
+      embedUrl: activeRoom.embedUrl,
+      participantsCount: activeRoom.participants.size,
+    });
+  }
+  res.json({ hasActive: false });
+});
+
 // REST: Create a new watch room
 app.post("/api/rooms", async (req, res) => {
   try {
-    const { startUrl, closeRoomId } = req.body;
+    const { startUrl, closeRoomId, forceNew } = req.body;
+
+    // Check if another device/browser already has an active party running
+    if (rooms.size > 0 && !closeRoomId && !forceNew) {
+      const activeRoom = Array.from(rooms.values())[0];
+      return res.status(409).json({
+        success: false,
+        alreadyRunning: true,
+        activeRoomId: activeRoom.roomId,
+        error: `A watch party is already running in room ${activeRoom.roomId}.`,
+      });
+    }
 
     // If requested to close an old room first, delete its VM immediately
     if (closeRoomId && rooms.has(closeRoomId)) {
@@ -125,6 +150,12 @@ app.post("/api/rooms", async (req, res) => {
       rooms.delete(closeRoomId);
       await deleteHyperbeamSession(oldRoom.sessionId);
       console.log(`Explicitly closed old room ${closeRoomId} before creating new one.`);
+    } else if (forceNew && rooms.size > 0) {
+      for (const [id, r] of rooms.entries()) {
+        if (r.cleanupTimer) clearTimeout(r.cleanupTimer);
+        rooms.delete(id);
+        await deleteHyperbeamSession(r.sessionId);
+      }
     }
 
     const session = await createHyperbeamSession(startUrl || "https://www.google.com");

@@ -50,10 +50,13 @@ const toastContainer = document.getElementById("toastContainer");
 
 // Active Room Modal Elements
 const activeRoomModal = document.getElementById("activeRoomModal");
+const modalTitle = document.getElementById("modalTitle");
+const modalDesc = document.getElementById("modalDesc");
 const modalRoomCode = document.getElementById("modalRoomCode");
 const rejoinActiveRoomBtn = document.getElementById("rejoinActiveRoomBtn");
 const closeOldAndCreateBtn = document.getElementById("closeOldAndCreateBtn");
 const cancelModalBtn = document.getElementById("cancelModalBtn");
+let currentPromptRoomId = null;
 
 // Name validation - user MUST enter their own name
 function validateUsername() {
@@ -124,40 +127,49 @@ function clearSavedRoom() {
   } catch {}
 }
 
-// Check if user has an active room running on server
-async function checkSavedRoom() {
+// Check if an active room already exists (either from this device or another device)
+async function checkActiveRoom() {
   const saved = getSavedRoom();
-  if (!saved || !saved.roomId) return;
 
-  // Don't show modal if user is visiting a specific room link via hash
-  if (window.location.hash) {
-    const hashRoom = window.location.hash.replace("#", "").trim();
-    if (hashRoom && hashRoom !== saved.roomId) return;
+  // First check if this specific device had a saved room
+  if (saved && saved.roomId) {
+    if (!window.location.hash || window.location.hash.replace("#", "").trim() === saved.roomId) {
+      try {
+        const res = await fetch(`/api/rooms/${saved.roomId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            currentPromptRoomId = saved.roomId;
+            modalTitle.textContent = "Party Already Live!";
+            modalDesc.innerHTML = `Room <span class="modal-code">${saved.roomId}</span> is currently active. Would you like to join it?`;
+            activeRoomModal.classList.remove("hidden");
+            return;
+          }
+        }
+      } catch {}
+    }
   }
 
+  // Cross-device check: see if ANY room is running on the server
   try {
-    const res = await fetch(`/api/rooms/${saved.roomId}`);
+    const res = await fetch("/api/active-room");
     if (res.ok) {
       const data = await res.json();
-      if (data.success) {
-        modalRoomCode.textContent = saved.roomId;
-        activeRoomModal.classList.remove("hidden");
-      } else {
-        clearSavedRoom();
+      if (data.hasActive) {
+        currentPromptRoomId = data.roomId;
+        if (!roomCodeInput.value) {
+          roomCodeInput.value = data.roomId;
+        }
       }
-    } else {
-      clearSavedRoom();
     }
-  } catch {
-    // Backend unreachable or offline
-  }
+  } catch {}
 }
 
 // Initial Setup: load previously saved name if the user entered one before
 const savedName = localStorage.getItem("cineparty_username") || "";
 usernameInput.value = savedName;
 
-// Check if URL has a room hash (e.g. #cine-a1b2c3)
+// Check if URL has a room hash (e.g. #7K4M)
 if (window.location.hash) {
   const hash = window.location.hash.replace("#", "").trim();
   if (hash) {
@@ -168,7 +180,7 @@ if (window.location.hash) {
 }
 
 checkApiStatus();
-checkSavedRoom();
+checkActiveRoom();
 
 // Tabs switching (Create vs Join)
 function switchTab(targetId) {
@@ -253,38 +265,60 @@ fullscreenBtn.addEventListener("click", () => {
   }
 });
 
-// CREATE ROOM ACTION (Checks for name and active room first)
+// CREATE ROOM ACTION (Checks for active room across all devices first)
 createRoomBtn.addEventListener("click", async () => {
   const username = validateUsername();
   if (!username) return;
 
-  const saved = getSavedRoom();
-  if (saved && saved.roomId) {
-    try {
-      const res = await fetch(`/api/rooms/${saved.roomId}`);
-      if (res.ok) {
-        modalRoomCode.textContent = saved.roomId;
+  // Cross-device check: Is a VM already active on the server from another device?
+  try {
+    const res = await fetch("/api/active-room");
+    if (res.ok) {
+      const data = await res.json();
+      if (data.hasActive) {
+        currentPromptRoomId = data.roomId;
+        modalTitle.textContent = "Party Already Live!";
+        modalDesc.innerHTML = `Room <span class="modal-code">${data.roomId}</span> is already active on another device. Would you like to join it?`;
         activeRoomModal.classList.remove("hidden");
         return;
       }
-    } catch {}
-    clearSavedRoom();
-  }
+    }
+  } catch {}
 
   executeCreateRoom(null);
 });
 
-// Modal Actions: Rejoin or Close Old & Start Fresh
-rejoinActiveRoomBtn.addEventListener("click", () => {
+// Modal Actions: Join Active Party OR Close Old & Start Fresh
+rejoinActiveRoomBtn.addEventListener("click", async () => {
   const username = validateUsername();
   if (!username) return;
 
   activeRoomModal.classList.add("hidden");
   const saved = getSavedRoom();
-  if (saved) {
-    currentUser.username = username;
+  const targetRoomId = currentPromptRoomId || (saved ? saved.roomId : null);
+  if (!targetRoomId) return;
+
+  currentUser.username = username;
+
+  // If this device created this exact room earlier, preserve host token:
+  if (saved && saved.roomId === targetRoomId && saved.embedUrl) {
     currentUser.isHost = saved.isHost;
-    enterRoom(saved.roomId, saved.embedUrl, saved.adminToken, saved.isHost);
+    await enterRoom(saved.roomId, saved.embedUrl, saved.adminToken, saved.isHost);
+    return;
+  }
+
+  // Otherwise, join existing room on the other device as a participant:
+  currentUser.isHost = false;
+  try {
+    const res = await fetch(`/api/rooms/${targetRoomId}`);
+    const data = await res.json();
+    if (data.success) {
+      await enterRoom(data.roomId, data.embedUrl, null, false);
+    } else {
+      alert("Active room expired or closed.");
+    }
+  } catch (err) {
+    alert("Error joining active party: " + err.message);
   }
 });
 
@@ -294,14 +328,13 @@ closeOldAndCreateBtn.addEventListener("click", () => {
 
   activeRoomModal.classList.add("hidden");
   const saved = getSavedRoom();
-  const oldRoomId = saved ? saved.roomId : null;
+  const oldRoomId = currentPromptRoomId || (saved ? saved.roomId : null);
   clearSavedRoom();
   executeCreateRoom(oldRoomId);
 });
 
 cancelModalBtn.addEventListener("click", () => {
   activeRoomModal.classList.add("hidden");
-  clearSavedRoom();
 });
 
 async function executeCreateRoom(closeRoomId = null) {
@@ -324,11 +357,18 @@ async function executeCreateRoom(closeRoomId = null) {
     const res = await fetch("/api/rooms", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ startUrl, closeRoomId }),
+      body: JSON.stringify({ startUrl, closeRoomId, forceNew: Boolean(closeRoomId) }),
     });
 
     const data = await res.json();
     if (!data.success) {
+      if (data.alreadyRunning && data.activeRoomId) {
+        currentPromptRoomId = data.activeRoomId;
+        modalTitle.textContent = "Party Already Live!";
+        modalDesc.innerHTML = `Room <span class="modal-code">${data.activeRoomId}</span> is already running. Would you like to join it?`;
+        activeRoomModal.classList.remove("hidden");
+        return;
+      }
       throw new Error(data.error || "Failed to create room.");
     }
 
