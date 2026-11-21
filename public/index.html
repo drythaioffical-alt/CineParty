@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CineParty - Watch Together in Sync</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Socket.io client -->
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body class="dark-theme">
+
+  <!-- API Key Missing Warning Banner (Hidden if key configured) -->
+  <div id="apiKeyBanner" class="alert-banner hidden">
+    <div class="banner-content">
+      <span class="banner-icon">⚠️</span>
+      <div class="banner-text">
+        <strong>Hyperbeam API Key Required:</strong> To launch virtual browser rooms, add your free Hyperbeam API key to <code>.env</code>.
+      </div>
+      <a href="https://hyperbeam.com/developer" target="_blank" class="banner-link">Get Free Key &rarr;</a>
+    </div>
+  </div>
+
+  <!-- LOBBY SCREEN -->
+  <div id="lobbyView" class="view-screen">
+    <div class="lobby-card">
+      <div class="brand-header">
+        <div class="brand-logo">🍿</div>
+        <h1>CineParty</h1>
+        <p class="tagline">Browse & watch movies together in sync. No extensions needed.</p>
+      </div>
+
+      <!-- User Profile Picker -->
+      <div class="form-group">
+        <label for="usernameInput">Your Nickname</label>
+        <div class="input-with-button">
+          <input type="text" id="usernameInput" placeholder="Enter your name" maxlength="20">
+          <button type="button" id="randomizeNameBtn" title="Randomize Name">🎲</button>
+        </div>
+      </div>
+
+      <!-- Mode Switcher Tabs -->
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="createTab">Create Party</button>
+        <button class="tab-btn" data-tab="joinTab">Join Room</button>
+      </div>
+
+      <!-- Tab 1: Create Room -->
+      <div id="createTab" class="tab-pane active">
+        <div class="form-group">
+          <label for="startUrlInput">Starting Website (Optional)</label>
+          <input type="url" id="startUrlInput" placeholder="https://www.google.com" value="https://www.google.com">
+          <span class="field-hint">🛡️ Built-in ad-blocker is automatically enabled to block popups!</span>
+        </div>
+
+        <button id="createRoomBtn" class="primary-btn full-width">
+          <span class="btn-text">🚀 Launch Party Room</span>
+          <span class="btn-spinner hidden"></span>
+        </button>
+      </div>
+
+      <!-- Tab 2: Join Room -->
+      <div id="joinTab" class="tab-pane">
+        <div class="form-group">
+          <label for="roomCodeInput">Room Code or Invite URL</label>
+          <input type="text" id="roomCodeInput" placeholder="e.g. cine-a1b2c3">
+        </div>
+
+        <button id="joinRoomBtn" class="primary-btn full-width">
+          <span class="btn-text">🍿 Join Party</span>
+          <span class="btn-spinner hidden"></span>
+        </button>
+      </div>
+
+      <div class="lobby-footer">
+        <div class="feature-pills">
+          <span class="pill">⚡ Real-time WebRTC</span>
+          <span class="pill">🛡️ Ad & Popup Blocker</span>
+          <span class="pill">💬 Live Chat</span>
+          <span class="pill">👥 Shared Controls</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WATCH PARTY SCREEN -->
+  <div id="roomView" class="view-screen hidden">
+    
+    <!-- Top Navigation Bar -->
+    <header class="party-navbar">
+      <div class="navbar-left">
+        <div class="nav-logo">🍿 CineParty</div>
+        <div class="room-badge" id="roomBadge" title="Click to copy room code">
+          <span class="badge-label">ROOM:</span>
+          <span id="currentRoomCode" class="badge-code">...</span>
+          <span class="copy-icon">📋</span>
+        </div>
+        <button id="copyInviteBtn" class="secondary-btn small-btn">
+          <span>🔗 Share Link</span>
+        </button>
+      </div>
+
+      <div class="navbar-center">
+        <!-- Host Controls for Browser Mouse/Keyboard Access -->
+        <div id="controlModeGroup" class="control-group">
+          <span class="control-label">Control:</span>
+          <button id="controlToggleBtn" class="toggle-btn" title="Toggle who can browse">
+            <span id="controlModeText">Anyone Can Browse</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="navbar-right">
+        <button id="fullscreenBtn" class="icon-btn" title="Toggle Fullscreen">⛶</button>
+        <button id="toggleChatBtn" class="icon-btn active" title="Toggle Chat Sidebar">💬 <span id="unreadBadge" class="badge-dot hidden"></span></button>
+        <button id="leaveRoomBtn" class="danger-btn small-btn">Leave</button>
+      </div>
+    </header>
+
+    <!-- Main Party Stage -->
+    <div class="party-body">
+      
+      <!-- Virtual Browser Cinema Viewport -->
+      <main class="cinema-container">
+        <div id="hyperbeamContainer" class="hb-viewport">
+          <!-- Loading Screen Overlay -->
+          <div id="browserLoader" class="browser-loader">
+            <div class="loader-spinner"></div>
+            <h3>Connecting to Virtual Browser...</h3>
+            <p>Spinning up your ad-blocked private browser container.</p>
+          </div>
+        </div>
+      </main>
+
+      <!-- Collapsible Right Sidebar (Chat & Users) -->
+      <aside id="chatSidebar" class="party-sidebar">
+        <div class="sidebar-tabs">
+          <button class="side-tab active" data-sidetab="chatPane">Chat</button>
+          <button class="side-tab" data-sidetab="usersPane">Party (<span id="userCount">0</span>)</button>
+        </div>
+
+        <!-- Chat Pane -->
+        <div id="chatPane" class="sidebar-pane active">
+          <div id="chatMessages" class="chat-messages-container">
+            <!-- Messages will be appended here -->
+          </div>
+
+          <!-- Quick Reaction Buttons -->
+          <div class="quick-reactions">
+            <button class="reaction-btn" data-emoji="🍿">🍿</button>
+            <button class="reaction-btn" data-emoji="😂">😂</button>
+            <button class="reaction-btn" data-emoji="😱">😱</button>
+            <button class="reaction-btn" data-emoji="🔥">🔥</button>
+            <button class="reaction-btn" data-emoji="❤️">❤️</button>
+          </div>
+
+          <!-- Chat Input -->
+          <form id="chatForm" class="chat-input-bar">
+            <input type="text" id="chatInput" placeholder="Say something..." autocomplete="off">
+            <button type="submit" id="sendBtn" class="send-btn">➤</button>
+          </form>
+        </div>
+
+        <!-- Participants Pane -->
+        <div id="usersPane" class="sidebar-pane">
+          <div id="usersList" class="users-list">
+            <!-- Connected users populated here -->
+          </div>
+        </div>
+      </aside>
+
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Main JavaScript App (ES Module) -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>
