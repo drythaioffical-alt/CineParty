@@ -343,6 +343,7 @@ joinRoomBtn.addEventListener("click", async () => {
   } else if (inputCode.includes("/")) {
     inputCode = inputCode.split("/").pop();
   }
+  inputCode = inputCode.trim().toUpperCase();
 
   const btnText = joinRoomBtn.querySelector(".btn-text");
   const spinner = joinRoomBtn.querySelector(".btn-spinner");

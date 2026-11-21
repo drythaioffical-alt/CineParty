@@ -102,9 +102,15 @@ async function deleteHyperbeamSession(sessionId) {
   }
 }
 
-// Generate friendly room code (e.g. "cine-a8f3b2")
+// Friendly, simple 4-character room codes (e.g. "7K4M", "PLAY", "STAR")
+const CODE_CHARS = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"; // Excludes 0/O and 1/I to prevent typos
 function generateRoomCode() {
-  return "cine-" + crypto.randomBytes(3).toString("hex");
+  let code = "";
+  for (let i = 0; i < 4; i++) {
+    code += CODE_CHARS.charAt(Math.floor(Math.random() * CODE_CHARS.length));
+  }
+  if (rooms.has(code)) return generateRoomCode();
+  return code;
 }
 
 // REST: Create a new watch room
@@ -150,9 +156,9 @@ app.post("/api/rooms", async (req, res) => {
   }
 });
 
-// REST: Get room info by ID
+// REST: Get room info by ID (case-insensitive)
 app.get("/api/rooms/:roomId", (req, res) => {
-  const { roomId } = req.params;
+  const roomId = req.params.roomId.trim().toUpperCase();
   const room = rooms.get(roomId);
 
   if (!room) {
@@ -181,6 +187,7 @@ io.on("connection", (socket) => {
   let currentUser = null;
 
   socket.on("join-room", ({ roomId, username, isHost }) => {
+    roomId = (roomId || "").trim().toUpperCase();
     currentRoomId = roomId;
     currentUser = {
       id: socket.id,
