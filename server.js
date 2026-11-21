@@ -212,10 +212,108 @@ app.get("/api/status", (req, res) => {
   });
 });
 
+// Track pending close requests: requestId -> { requesterSocketId, roomId, timeoutHandle }
+const pendingCloseRequests = new Map();
+
 // Socket.io for Real-time Group Chat & Presence
 io.on("connection", (socket) => {
   let currentRoomId = null;
   let currentUser = null;
+
+  // Device B asks permission to close active room from Device A (the host)
+  socket.on("request-close-room", ({ roomId, requesterName }) => {
+    roomId = (roomId || "").trim().toUpperCase();
+    const room = rooms.get(roomId);
+
+    if (!room) {
+      return socket.emit("close-request-response", {
+        approved: true, // No room running, Device B is free to create
+      });
+    }
+
+    // Find the host participant (or any active participant if host disconnected)
+    const hostParticipant =
+      Array.from(room.participants.values()).find((p) => p.isHost) ||
+      Array.from(room.participants.values())[0];
+
+    // If nobody is currently active in the room (empty during grace period)
+    if (!hostParticipant || room.participants.size === 0) {
+      console.log(`No active users in room ${roomId}. Auto-granting close request to ${requesterName}.`);
+      if (room.cleanupTimer) clearTimeout(room.cleanupTimer);
+      rooms.delete(roomId);
+      deleteHyperbeamSession(room.sessionId);
+      return socket.emit("close-request-response", { approved: true });
+    }
+
+    // Generate unique request ID and set a 30-second countdown
+    const requestId = "req-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+    console.log(`Device B (${requesterName}) requested to close room ${roomId}. Asking host (${hostParticipant.username})...`);
+
+    const timeoutHandle = setTimeout(() => {
+      if (pendingCloseRequests.has(requestId)) {
+        pendingCloseRequests.delete(requestId);
+        console.log(`Close request ${requestId} timed out. Auto-denying.`);
+        socket.emit("close-request-response", {
+          approved: false,
+          reason: "The host did not respond in time. Request was automatically denied.",
+        });
+      }
+    }, 30000); // 30-second timeout
+
+    pendingCloseRequests.set(requestId, {
+      requesterSocketId: socket.id,
+      roomId,
+      timeoutHandle,
+    });
+
+    // Notify the host device with a live modal prompt
+    io.to(hostParticipant.id).emit("incoming-close-request", {
+      requestId,
+      requesterName: requesterName || "Another device",
+      timeoutSeconds: 30,
+    });
+  });
+
+  // Device B cancels their close request
+  socket.on("cancel-close-request", ({ requestId }) => {
+    if (requestId && pendingCloseRequests.has(requestId)) {
+      const request = pendingCloseRequests.get(requestId);
+      clearTimeout(request.timeoutHandle);
+      pendingCloseRequests.delete(requestId);
+      console.log(`Device B canceled close request ${requestId}`);
+    }
+  });
+
+  // Host on Device A answers the permission request (Allow or Deny)
+  socket.on("respond-close-request", async ({ requestId, approved }) => {
+    if (!request) return;
+
+    clearTimeout(request.timeoutHandle);
+    pendingCloseRequests.delete(requestId);
+
+    if (approved) {
+      console.log(`Host APPROVED closing room ${request.roomId}.`);
+      const room = rooms.get(request.roomId);
+      if (room) {
+        if (room.cleanupTimer) clearTimeout(room.cleanupTimer);
+        io.to(request.roomId).emit("chat-message", {
+          system: true,
+          text: "Host closed this room to start a new party.",
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        });
+        io.to(request.roomId).emit("room-closed-by-host");
+        rooms.delete(request.roomId);
+        await deleteHyperbeamSession(room.sessionId);
+      }
+      io.to(request.requesterSocketId).emit("close-request-response", { approved: true });
+    } else {
+      console.log(`Host DENIED closing room ${request.roomId}.`);
+      io.to(request.requesterSocketId).emit("close-request-response", {
+        approved: false,
+        reason: "The host chose to keep the current watch party active. You can join them instead!",
+      });
+    }
+  });
 
   socket.on("join-room", ({ roomId, username, isHost }) => {
     roomId = (roomId || "").trim().toUpperCase();

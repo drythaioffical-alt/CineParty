@@ -183,10 +183,34 @@
       <div class="modal-icon">🍿</div>
       <h3 id="modalTitle">Party Already Live!</h3>
       <p id="modalDesc">Room <span id="modalRoomCode" class="modal-code">7K4M</span> is currently active. Would you like to join it?</p>
-      <div class="modal-actions">
+      
+      <!-- Normal Action Buttons -->
+      <div id="modalNormalActions" class="modal-actions">
         <button id="rejoinActiveRoomBtn" class="primary-btn full-width">🍿 Join This Active Party</button>
-        <button id="closeOldAndCreateBtn" class="secondary-btn full-width" style="margin-top: 6px;">🗑 Close & Start New Room</button>
+        <button id="closeOldAndCreateBtn" class="secondary-btn full-width" style="margin-top: 6px;">✋ Ask Host to Close & Start New</button>
         <button id="cancelModalBtn" class="link-btn" style="margin-top: 4px;">Cancel</button>
+      </div>
+
+      <!-- Waiting for Host Approval State -->
+      <div id="closeRequestWaiting" class="request-waiting hidden">
+        <div class="loader-spinner" style="width: 32px; height: 32px; margin: 12px auto;"></div>
+        <p style="font-size: 0.9rem; color: #fff; margin-bottom: 8px;">Asking host on Device A for permission to close...</p>
+        <div class="countdown-pill">Auto-denies in <span id="requestCountdown">30</span>s if host ignores</div>
+        <button id="cancelRequestBtn" class="link-btn" style="margin-top: 12px;">Cancel Request</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Host Approval Modal (Appears on Device A in party room) -->
+  <div id="hostApprovalModal" class="modal-overlay hidden">
+    <div class="modal-card" style="border-color: rgba(239, 68, 68, 0.4);">
+      <div class="modal-icon">⚠️</div>
+      <h3 style="color: #f87171;">Room Close Request</h3>
+      <p><strong id="requesterNameSpan" style="color: #fff;">Another device</strong> wants to close your party room to start a new one.</p>
+      <div class="countdown-pill" style="margin-bottom: 20px;">Auto-denies in <span id="hostCountdown">30</span>s if you do nothing</div>
+      <div class="modal-actions">
+        <button id="denyCloseBtn" class="primary-btn full-width">❌ Keep My Room (Deny)</button>
+        <button id="allowCloseBtn" class="danger-btn full-width" style="margin-top: 6px;">✓ Allow & Close Room</button>
       </div>
     </div>
   </div>

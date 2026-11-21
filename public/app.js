@@ -53,10 +53,26 @@ const activeRoomModal = document.getElementById("activeRoomModal");
 const modalTitle = document.getElementById("modalTitle");
 const modalDesc = document.getElementById("modalDesc");
 const modalRoomCode = document.getElementById("modalRoomCode");
+const modalNormalActions = document.getElementById("modalNormalActions");
+const closeRequestWaiting = document.getElementById("closeRequestWaiting");
+const requestCountdown = document.getElementById("requestCountdown");
+const cancelRequestBtn = document.getElementById("cancelRequestBtn");
 const rejoinActiveRoomBtn = document.getElementById("rejoinActiveRoomBtn");
 const closeOldAndCreateBtn = document.getElementById("closeOldAndCreateBtn");
 const cancelModalBtn = document.getElementById("cancelModalBtn");
+
+// Host Approval Modal Elements (Device A)
+const hostApprovalModal = document.getElementById("hostApprovalModal");
+const requesterNameSpan = document.getElementById("requesterNameSpan");
+const hostCountdown = document.getElementById("hostCountdown");
+const denyCloseBtn = document.getElementById("denyCloseBtn");
+const allowCloseBtn = document.getElementById("allowCloseBtn");
+
 let currentPromptRoomId = null;
+let activeRequestTimer = null;
+let activeHostTimer = null;
+let incomingRequestId = null;
+let lobbySocket = null;
 
 // Name validation - user MUST enter their own name
 function validateUsername() {
@@ -322,15 +338,77 @@ rejoinActiveRoomBtn.addEventListener("click", async () => {
   }
 });
 
+function getLobbySocket() {
+  if (!lobbySocket) {
+    lobbySocket = io();
+  }
+  return lobbySocket;
+}
+
+// Device B asks permission to close & restart room
 closeOldAndCreateBtn.addEventListener("click", () => {
   const username = validateUsername();
   if (!username) return;
 
-  activeRoomModal.classList.add("hidden");
   const saved = getSavedRoom();
-  const oldRoomId = currentPromptRoomId || (saved ? saved.roomId : null);
-  clearSavedRoom();
-  executeCreateRoom(oldRoomId);
+  const targetRoomId = currentPromptRoomId || (saved ? saved.roomId : null);
+  if (!targetRoomId) {
+    activeRoomModal.classList.add("hidden");
+    executeCreateRoom(null);
+    return;
+  }
+
+  // Show waiting state on Device B
+  modalNormalActions.classList.add("hidden");
+  closeRequestWaiting.classList.remove("hidden");
+
+  let remaining = 30;
+  requestCountdown.textContent = remaining;
+  if (activeRequestTimer) clearInterval(activeRequestTimer);
+  activeRequestTimer = setInterval(() => {
+    remaining--;
+    requestCountdown.textContent = remaining;
+    if (remaining <= 0) {
+      clearInterval(activeRequestTimer);
+      activeRequestTimer = null;
+    }
+  }, 1000);
+
+  const sock = getLobbySocket();
+
+  // Send permission request to host on Device A
+  sock.emit("request-close-room", {
+    roomId: targetRoomId,
+    requesterName: username,
+  });
+
+  // Listen once for host response
+  sock.off("close-request-response");
+  sock.once("close-request-response", ({ approved, reason }) => {
+    if (activeRequestTimer) clearInterval(activeRequestTimer);
+    activeRequestTimer = null;
+    modalNormalActions.classList.remove("hidden");
+    closeRequestWaiting.classList.add("hidden");
+
+    if (approved) {
+      activeRoomModal.classList.add("hidden");
+      clearSavedRoom();
+      showToast("🎉 Host approved! Creating your new party room...");
+      executeCreateRoom(targetRoomId);
+    } else {
+      showToast(reason || "❌ Request denied by host.");
+    }
+  });
+});
+
+cancelRequestBtn.addEventListener("click", () => {
+  if (activeRequestTimer) clearInterval(activeRequestTimer);
+  activeRequestTimer = null;
+  modalNormalActions.classList.remove("hidden");
+  closeRequestWaiting.classList.add("hidden");
+  if (lobbySocket) {
+    lobbySocket.emit("cancel-close-request", { requestId: currentPromptRoomId });
+  }
 });
 
 cancelModalBtn.addEventListener("click", () => {
@@ -537,6 +615,56 @@ function initSocket(roomId, username, isHost) {
   socket.on("control-mode-updated", ({ mode }) => {
     controlModeText.textContent = mode === "anyone" ? "Anyone Can Browse" : "Host Only";
     showToast(`Controls set to: ${mode === "anyone" ? "Everyone" : "Host only"}`);
+  });
+
+  // Handle incoming close permission request from Device B (appears on Device A)
+  socket.on("incoming-close-request", ({ requestId, requesterName, timeoutSeconds }) => {
+    incomingRequestId = requestId;
+    requesterNameSpan.textContent = requesterName;
+    hostApprovalModal.classList.remove("hidden");
+
+    let remaining = timeoutSeconds || 30;
+    hostCountdown.textContent = remaining;
+    if (activeHostTimer) clearInterval(activeHostTimer);
+    activeHostTimer = setInterval(() => {
+      remaining--;
+      hostCountdown.textContent = remaining;
+      if (remaining <= 0) {
+        clearInterval(activeHostTimer);
+        activeHostTimer = null;
+        hostApprovalModal.classList.add("hidden");
+        showToast("🛡️ Close request timed out. Kept your room active.");
+      }
+    }, 1000);
+  });
+
+  // Host denies closing (keeps room open)
+  denyCloseBtn.onclick = () => {
+    if (activeHostTimer) clearInterval(activeHostTimer);
+    activeHostTimer = null;
+    hostApprovalModal.classList.add("hidden");
+    if (incomingRequestId) {
+      socket.emit("respond-close-request", { requestId: incomingRequestId, approved: false });
+      incomingRequestId = null;
+    }
+    showToast("🛡️ Kept your watch room active. Request denied.");
+  };
+
+  // Host allows closing
+  allowCloseBtn.onclick = () => {
+    if (activeHostTimer) clearInterval(activeHostTimer);
+    activeHostTimer = null;
+    hostApprovalModal.classList.add("hidden");
+    if (incomingRequestId) {
+      socket.emit("respond-close-request", { requestId: incomingRequestId, approved: true });
+      incomingRequestId = null;
+    }
+  };
+
+  // If room was closed by host approval
+  socket.on("room-closed-by-host", () => {
+    alert("This watch room was closed to start a new session.");
+    location.reload();
   });
 }
 
