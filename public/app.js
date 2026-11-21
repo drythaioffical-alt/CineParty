@@ -37,6 +37,8 @@ const leaveRoomBtn = document.getElementById("leaveRoomBtn");
 const hbContainer = document.getElementById("hyperbeamContainer");
 const browserLoader = document.getElementById("browserLoader");
 const chatSidebar = document.getElementById("chatSidebar");
+const closeSidebarBtn = document.getElementById("closeSidebarBtn");
+const sidebarBackdrop = document.getElementById("sidebarBackdrop");
 const sideTabs = document.querySelectorAll(".side-tab");
 const sidePanes = document.querySelectorAll(".sidebar-pane");
 const chatMessages = document.getElementById("chatMessages");
@@ -126,14 +128,39 @@ sideTabs.forEach((tab) => {
   });
 });
 
-// Toggle Chat Sidebar
+// Toggle Chat Sidebar & Mobile Drawer
+function openSidebar() {
+  chatSidebar.classList.remove("collapsed");
+  toggleChatBtn.classList.add("active");
+  unreadBadge.classList.add("hidden");
+  if (window.innerWidth <= 768 && sidebarBackdrop) {
+    sidebarBackdrop.classList.remove("hidden");
+  }
+}
+
+function closeSidebar() {
+  chatSidebar.classList.add("collapsed");
+  toggleChatBtn.classList.remove("active");
+  if (sidebarBackdrop) {
+    sidebarBackdrop.classList.add("hidden");
+  }
+}
+
 toggleChatBtn.addEventListener("click", () => {
-  chatSidebar.classList.toggle("collapsed");
-  toggleChatBtn.classList.toggle("active", !chatSidebar.classList.contains("collapsed"));
-  if (!chatSidebar.classList.contains("collapsed")) {
-    unreadBadge.classList.add("hidden");
+  if (chatSidebar.classList.contains("collapsed")) {
+    openSidebar();
+  } else {
+    closeSidebar();
   }
 });
+
+if (closeSidebarBtn) {
+  closeSidebarBtn.addEventListener("click", closeSidebar);
+}
+
+if (sidebarBackdrop) {
+  sidebarBackdrop.addEventListener("click", closeSidebar);
+}
 
 // Copy Room Link
 function copyRoomLink() {
@@ -251,6 +278,13 @@ async function enterRoom(roomId, embedUrl, adminToken, isHost) {
   lobbyView.classList.add("hidden");
   roomView.classList.remove("hidden");
   browserLoader.classList.remove("hidden");
+
+  // On mobile start with sidebar collapsed for full-screen video, on desktop start open
+  if (window.innerWidth <= 768) {
+    closeSidebar();
+  } else {
+    openSidebar();
+  }
 
   // Show or hide host controls
   if (isHost) {

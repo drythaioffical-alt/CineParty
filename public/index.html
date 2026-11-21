@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>CineParty - Watch Together in Sync</title>
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -136,7 +136,12 @@
       </main>
 
       <!-- Collapsible Right Sidebar (Chat & Users) -->
-      <aside id="chatSidebar" class="party-sidebar">
+      <div id="sidebarBackdrop" class="sidebar-backdrop hidden"></div>
+      <aside id="chatSidebar" class="party-sidebar collapsed">
+        <div class="sidebar-header-mobile">
+          <span class="mobile-sidebar-title">💬 Chat & Room</span>
+          <button id="closeSidebarBtn" class="close-sidebar-btn" title="Close Chat">✕</button>
+        </div>
         <div class="sidebar-tabs">
           <button class="side-tab active" data-sidetab="chatPane">Chat</button>
           <button class="side-tab" data-sidetab="usersPane">Party (<span id="userCount">0</span>)</button>

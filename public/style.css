@@ -33,10 +33,16 @@ body {
   background-color: var(--bg-main);
   color: var(--text-main);
   height: 100vh;
+  height: 100dvh;
   width: 100vw;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* Alert Banner */
@@ -361,6 +367,7 @@ button {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -761,4 +768,226 @@ button {
 @keyframes toastIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* ========================================================
+   MOBILE & TABLET RESPONSIVE STYLES
+   ======================================================== */
+
+.sidebar-header-mobile {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-color);
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.close-sidebar-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.2rem;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.close-sidebar-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  :root {
+    --header-height: 50px;
+  }
+
+  /* Prevent iOS automatic zoom on focus */
+  input[type="text"],
+  input[type="url"] {
+    font-size: 16px !important;
+  }
+
+  /* Lobby on Mobile */
+  #lobbyView {
+    padding: 16px 12px;
+    align-items: flex-start;
+  }
+
+  .lobby-card {
+    padding: 24px 18px;
+    border-radius: var(--radius-md);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    margin-top: 10px;
+  }
+
+  .brand-logo {
+    font-size: 2.8rem;
+    margin-bottom: 4px;
+  }
+
+  .brand-header h1 {
+    font-size: 1.6rem;
+  }
+
+  .primary-btn {
+    padding: 14px 16px;
+    min-height: 48px;
+  }
+
+  /* Navbar on Mobile */
+  .party-navbar {
+    padding: 0 10px;
+    gap: 8px;
+  }
+
+  .nav-logo {
+    font-size: 0.95rem;
+    display: none; /* Hide logo text to give room to buttons */
+  }
+
+  .navbar-left, .navbar-center, .navbar-right {
+    gap: 6px;
+  }
+
+  .badge-label {
+    display: none; /* Hide 'ROOM:' text */
+  }
+
+  .room-badge {
+    padding: 5px 8px;
+    font-size: 0.8rem;
+  }
+
+  #copyInviteBtn span {
+    display: none; /* Icon only */
+  }
+
+  #copyInviteBtn::before {
+    content: "🔗";
+  }
+
+  #copyInviteBtn {
+    padding: 6px 10px;
+  }
+
+  .control-label {
+    display: none;
+  }
+
+  .toggle-btn {
+    padding: 4px 10px;
+    font-size: 0.75rem;
+  }
+
+  .icon-btn {
+    width: 34px;
+    height: 34px;
+  }
+
+  .danger-btn.small-btn {
+    padding: 5px 8px;
+    font-size: 0.78rem;
+  }
+
+  /* Cinema Viewport takes full screen on mobile */
+  .party-body {
+    flex-direction: column;
+    position: relative;
+  }
+
+  .cinema-container {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Chat Sidebar becomes a modern Bottom Drawer on Mobile */
+  .sidebar-header-mobile {
+    display: flex;
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
+    z-index: 90;
+    transition: opacity 0.25s ease;
+  }
+
+  .sidebar-backdrop.hidden {
+    display: none !important;
+  }
+
+  .party-sidebar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 72vh;
+    height: 72dvh;
+    max-height: 85vh;
+    border-top: 1px solid var(--border-light);
+    border-left: none;
+    border-radius: 18px 18px 0 0;
+    z-index: 100;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.85);
+    margin-right: 0 !important;
+    transform: translateY(0);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .party-sidebar.collapsed {
+    transform: translateY(105%);
+    pointer-events: none;
+  }
+
+  .chat-input-bar {
+    padding: 10px 12px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .quick-reactions {
+    padding: 4px 10px;
+  }
+
+  .reaction-btn {
+    font-size: 1.4rem;
+    padding: 6px;
+  }
+
+  .toast {
+    font-size: 0.82rem;
+    padding: 8px 16px;
+    max-width: 90vw;
+    text-align: center;
+  }
+}
+
+/* Extra small screens (< 420px) */
+@media (max-width: 420px) {
+  #controlModeGroup {
+    display: none;
+  }
+
+  .party-navbar {
+    padding: 0 6px;
+  }
+
+  .badge-code {
+    font-size: 0.78rem;
+  }
 }
