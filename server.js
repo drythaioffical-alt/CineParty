@@ -110,7 +110,17 @@ function generateRoomCode() {
 // REST: Create a new watch room
 app.post("/api/rooms", async (req, res) => {
   try {
-    const { startUrl } = req.body;
+    const { startUrl, closeRoomId } = req.body;
+
+    // If requested to close an old room first, delete its VM immediately
+    if (closeRoomId && rooms.has(closeRoomId)) {
+      const oldRoom = rooms.get(closeRoomId);
+      if (oldRoom.cleanupTimer) clearTimeout(oldRoom.cleanupTimer);
+      rooms.delete(closeRoomId);
+      await deleteHyperbeamSession(oldRoom.sessionId);
+      console.log(`Explicitly closed old room ${closeRoomId} before creating new one.`);
+    }
+
     const session = await createHyperbeamSession(startUrl || "https://www.google.com");
     const roomId = generateRoomCode();
 
@@ -123,6 +133,7 @@ app.post("/api/rooms", async (req, res) => {
       controlMode: "anyone", // "anyone" or "host-only"
       activeController: null,
       participants: new Map(),
+      cleanupTimer: null, // Grace period timer
     };
 
     rooms.set(roomId, roomData);
@@ -181,6 +192,13 @@ io.on("connection", (socket) => {
 
     let room = rooms.get(roomId);
     if (room) {
+      // If there was a grace period timer waiting to delete the VM, cancel it!
+      if (room.cleanupTimer) {
+        console.log(`User reconnected to room ${roomId}. Cancelling VM termination timer.`);
+        clearTimeout(room.cleanupTimer);
+        room.cleanupTimer = null;
+      }
+
       room.participants.set(socket.id, currentUser);
 
       // Send participant list to everyone in room
@@ -238,11 +256,21 @@ io.on("connection", (socket) => {
         });
       }
 
-      // If room is now empty, immediately terminate the VM to free up slots
+      // If room is empty, wait 2 minutes before terminating the VM (grace period for app switching / reloads)
       if (room.participants.size === 0) {
-        console.log(`Room ${currentRoomId} is empty. Terminating VM to free up capacity...`);
-        rooms.delete(currentRoomId);
-        await deleteHyperbeamSession(room.sessionId);
+        console.log(`Room ${currentRoomId} is empty. Starting 2-minute grace period before terminating VM...`);
+        if (room.cleanupTimer) clearTimeout(room.cleanupTimer);
+        
+        room.cleanupTimer = setTimeout(async () => {
+          if (rooms.has(currentRoomId)) {
+            const r = rooms.get(currentRoomId);
+            if (r.participants.size === 0) {
+              console.log(`Grace period expired for room ${currentRoomId}. Terminating VM to free capacity...`);
+              rooms.delete(currentRoomId);
+              await deleteHyperbeamSession(r.sessionId);
+            }
+          }
+        }, 120000); // 2 minutes
       }
     }
   });

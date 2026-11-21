@@ -49,6 +49,13 @@ const usersList = document.getElementById("usersList");
 const userCountEl = document.getElementById("userCount");
 const toastContainer = document.getElementById("toastContainer");
 
+// Active Room Modal Elements
+const activeRoomModal = document.getElementById("activeRoomModal");
+const modalRoomCode = document.getElementById("modalRoomCode");
+const rejoinActiveRoomBtn = document.getElementById("rejoinActiveRoomBtn");
+const closeOldAndCreateBtn = document.getElementById("closeOldAndCreateBtn");
+const cancelModalBtn = document.getElementById("cancelModalBtn");
+
 // Random name generator
 const adjectives = ["Cosmic", "Neon", "Cyber", "Midnight", "Golden", "Retro", "Pixel", "Silent", "Popcorn", "Velvet"];
 const nouns = ["Viewer", "Watcher", "Cinephile", "Streamer", "Critic", "Fan", "Nomad", "Captain", "Buddy", "Pirate"];
@@ -86,6 +93,58 @@ async function checkApiStatus() {
   }
 }
 
+// Saved Room helpers (LocalStorage)
+function getSavedRoom() {
+  try {
+    const raw = localStorage.getItem("cineparty_saved_room");
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function saveRoom(room) {
+  try {
+    localStorage.setItem("cineparty_saved_room", JSON.stringify(room));
+  } catch {}
+}
+
+function clearSavedRoom() {
+  try {
+    localStorage.removeItem("cineparty_saved_room");
+  } catch {}
+}
+
+// Check if user has an active room running on server
+async function checkSavedRoom() {
+  const saved = getSavedRoom();
+  if (!saved || !saved.roomId) return;
+
+  // Don't show modal if user is visiting a specific room link via hash
+  if (window.location.hash) {
+    const hashRoom = window.location.hash.replace("#", "").trim();
+    if (hashRoom && hashRoom !== saved.roomId) return;
+  }
+
+  try {
+    const res = await fetch(`/api/rooms/${saved.roomId}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success) {
+        modalRoomCode.textContent = saved.roomId;
+        activeRoomModal.classList.remove("hidden");
+      } else {
+        clearSavedRoom();
+      }
+    } else {
+      clearSavedRoom();
+    }
+  } catch {
+    // Backend unreachable or offline
+  }
+}
+
 // Initial Setup
 usernameInput.value = getRandomName();
 randomizeNameBtn.addEventListener("click", () => {
@@ -103,6 +162,7 @@ if (window.location.hash) {
 }
 
 checkApiStatus();
+checkSavedRoom();
 
 // Tabs switching (Create vs Join)
 function switchTab(targetId) {
@@ -187,8 +247,49 @@ fullscreenBtn.addEventListener("click", () => {
   }
 });
 
-// CREATE ROOM ACTION
+// CREATE ROOM ACTION (Checks for active room first)
 createRoomBtn.addEventListener("click", async () => {
+  const saved = getSavedRoom();
+  if (saved && saved.roomId) {
+    try {
+      const res = await fetch(`/api/rooms/${saved.roomId}`);
+      if (res.ok) {
+        modalRoomCode.textContent = saved.roomId;
+        activeRoomModal.classList.remove("hidden");
+        return;
+      }
+    } catch {}
+    clearSavedRoom();
+  }
+
+  executeCreateRoom(null);
+});
+
+// Modal Actions: Rejoin or Close Old & Start Fresh
+rejoinActiveRoomBtn.addEventListener("click", () => {
+  activeRoomModal.classList.add("hidden");
+  const saved = getSavedRoom();
+  if (saved) {
+    currentUser.username = usernameInput.value.trim() || saved.username || getRandomName();
+    currentUser.isHost = saved.isHost;
+    enterRoom(saved.roomId, saved.embedUrl, saved.adminToken, saved.isHost);
+  }
+});
+
+closeOldAndCreateBtn.addEventListener("click", () => {
+  activeRoomModal.classList.add("hidden");
+  const saved = getSavedRoom();
+  const oldRoomId = saved ? saved.roomId : null;
+  clearSavedRoom();
+  executeCreateRoom(oldRoomId);
+});
+
+cancelModalBtn.addEventListener("click", () => {
+  activeRoomModal.classList.add("hidden");
+  clearSavedRoom();
+});
+
+async function executeCreateRoom(closeRoomId = null) {
   const username = usernameInput.value.trim() || getRandomName();
   currentUser.username = username;
   currentUser.isHost = true;
@@ -206,7 +307,7 @@ createRoomBtn.addEventListener("click", async () => {
     const res = await fetch("/api/rooms", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ startUrl }),
+      body: JSON.stringify({ startUrl, closeRoomId }),
     });
 
     const data = await res.json();
@@ -222,7 +323,7 @@ createRoomBtn.addEventListener("click", async () => {
     btnText.textContent = "🚀 Launch Party Room";
     spinner.classList.add("hidden");
   }
-});
+}
 
 // JOIN ROOM ACTION
 joinRoomBtn.addEventListener("click", async () => {
@@ -269,6 +370,15 @@ joinRoomBtn.addEventListener("click", async () => {
 // ENTER WATCH ROOM
 async function enterRoom(roomId, embedUrl, adminToken, isHost) {
   currentRoom = { roomId, embedUrl, adminToken, isHost };
+
+  // Save room state locally so if tab closes or user switches apps, they can resume
+  saveRoom({
+    roomId,
+    embedUrl,
+    adminToken,
+    isHost,
+    username: currentUser.username,
+  });
 
   // Update URL hash
   window.location.hash = roomId;
@@ -439,6 +549,7 @@ controlToggleBtn.addEventListener("click", () => {
 // Leave Room
 leaveRoomBtn.addEventListener("click", () => {
   if (confirm("Are you sure you want to leave the watch party?")) {
+    clearSavedRoom();
     if (hbInstance) {
       hbInstance.destroy();
       hbInstance = null;

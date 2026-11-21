@@ -180,6 +180,20 @@
     </div>
   </div>
 
+  <!-- Active Room Recovery Modal -->
+  <div id="activeRoomModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-icon">🍿</div>
+      <h3>Existing Party Found</h3>
+      <p>You have an active watch party running (<span id="modalRoomCode" class="modal-code">cine-xxxxxx</span>).</p>
+      <div class="modal-actions">
+        <button id="rejoinActiveRoomBtn" class="primary-btn full-width">▶ Rejoin Existing Room</button>
+        <button id="closeOldAndCreateBtn" class="danger-btn full-width" style="margin-top: 8px;">🗑 Close Old & Start Fresh</button>
+        <button id="cancelModalBtn" class="link-btn" style="margin-top: 6px;">Dismiss</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification Container -->
   <div id="toastContainer" class="toast-container"></div>
 
