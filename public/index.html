@@ -35,11 +35,8 @@
 
       <!-- User Profile Picker -->
       <div class="form-group">
-        <label for="usernameInput">Your Nickname</label>
-        <div class="input-with-button">
-          <input type="text" id="usernameInput" placeholder="Enter your name" maxlength="20">
-          <button type="button" id="randomizeNameBtn" title="Randomize Name">🎲</button>
-        </div>
+        <label for="usernameInput">Your Name <span style="color: var(--accent);">*</span></label>
+        <input type="text" id="usernameInput" placeholder="Enter your name to continue..." maxlength="25" autocomplete="name" required>
       </div>
 
       <!-- Mode Switcher Tabs -->

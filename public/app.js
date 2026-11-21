@@ -14,7 +14,6 @@ const apiKeyBanner = document.getElementById("apiKeyBanner");
 const lobbyView = document.getElementById("lobbyView");
 const roomView = document.getElementById("roomView");
 const usernameInput = document.getElementById("usernameInput");
-const randomizeNameBtn = document.getElementById("randomizeNameBtn");
 const tabBtns = document.querySelectorAll(".tab-btn");
 const tabPanes = document.querySelectorAll(".tab-pane");
 
@@ -56,16 +55,25 @@ const rejoinActiveRoomBtn = document.getElementById("rejoinActiveRoomBtn");
 const closeOldAndCreateBtn = document.getElementById("closeOldAndCreateBtn");
 const cancelModalBtn = document.getElementById("cancelModalBtn");
 
-// Random name generator
-const adjectives = ["Cosmic", "Neon", "Cyber", "Midnight", "Golden", "Retro", "Pixel", "Silent", "Popcorn", "Velvet"];
-const nouns = ["Viewer", "Watcher", "Cinephile", "Streamer", "Critic", "Fan", "Nomad", "Captain", "Buddy", "Pirate"];
-
-function getRandomName() {
-  const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
-  const noun = nouns[Math.floor(Math.random() * nouns.length)];
-  const num = Math.floor(Math.random() * 90 + 10);
-  return `${adj}${noun}-${num}`;
+// Name validation - user MUST enter their own name
+function validateUsername() {
+  const name = usernameInput.value.trim();
+  if (!name) {
+    usernameInput.focus();
+    usernameInput.style.borderColor = "var(--accent)";
+    usernameInput.style.boxShadow = "0 0 0 3px var(--accent-glow)";
+    showToast("⚠️ Please enter your name to continue!");
+    return null;
+  }
+  localStorage.setItem("cineparty_username", name);
+  return name;
 }
+
+// Reset error border on typing
+usernameInput.addEventListener("input", () => {
+  usernameInput.style.borderColor = "";
+  usernameInput.style.boxShadow = "";
+});
 
 // Show toast notification
 function showToast(message) {
@@ -145,11 +153,9 @@ async function checkSavedRoom() {
   }
 }
 
-// Initial Setup
-usernameInput.value = getRandomName();
-randomizeNameBtn.addEventListener("click", () => {
-  usernameInput.value = getRandomName();
-});
+// Initial Setup: load previously saved name if the user entered one before
+const savedName = localStorage.getItem("cineparty_username") || "";
+usernameInput.value = savedName;
 
 // Check if URL has a room hash (e.g. #cine-a1b2c3)
 if (window.location.hash) {
@@ -247,8 +253,11 @@ fullscreenBtn.addEventListener("click", () => {
   }
 });
 
-// CREATE ROOM ACTION (Checks for active room first)
+// CREATE ROOM ACTION (Checks for name and active room first)
 createRoomBtn.addEventListener("click", async () => {
+  const username = validateUsername();
+  if (!username) return;
+
   const saved = getSavedRoom();
   if (saved && saved.roomId) {
     try {
@@ -267,16 +276,22 @@ createRoomBtn.addEventListener("click", async () => {
 
 // Modal Actions: Rejoin or Close Old & Start Fresh
 rejoinActiveRoomBtn.addEventListener("click", () => {
+  const username = validateUsername();
+  if (!username) return;
+
   activeRoomModal.classList.add("hidden");
   const saved = getSavedRoom();
   if (saved) {
-    currentUser.username = usernameInput.value.trim() || saved.username || getRandomName();
+    currentUser.username = username;
     currentUser.isHost = saved.isHost;
     enterRoom(saved.roomId, saved.embedUrl, saved.adminToken, saved.isHost);
   }
 });
 
 closeOldAndCreateBtn.addEventListener("click", () => {
+  const username = validateUsername();
+  if (!username) return;
+
   activeRoomModal.classList.add("hidden");
   const saved = getSavedRoom();
   const oldRoomId = saved ? saved.roomId : null;
@@ -290,7 +305,9 @@ cancelModalBtn.addEventListener("click", () => {
 });
 
 async function executeCreateRoom(closeRoomId = null) {
-  const username = usernameInput.value.trim() || getRandomName();
+  const username = validateUsername();
+  if (!username) return;
+
   currentUser.username = username;
   currentUser.isHost = true;
 
@@ -327,7 +344,9 @@ async function executeCreateRoom(closeRoomId = null) {
 
 // JOIN ROOM ACTION
 joinRoomBtn.addEventListener("click", async () => {
-  const username = usernameInput.value.trim() || getRandomName();
+  const username = validateUsername();
+  if (!username) return;
+
   currentUser.username = username;
   currentUser.isHost = false;
 
