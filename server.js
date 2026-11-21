@@ -286,6 +286,7 @@ io.on("connection", (socket) => {
 
   // Host on Device A answers the permission request (Allow or Deny)
   socket.on("respond-close-request", async ({ requestId, approved }) => {
+    const request = pendingCloseRequests.get(requestId);
     if (!request) return;
 
     clearTimeout(request.timeoutHandle);
@@ -303,7 +304,7 @@ io.on("connection", (socket) => {
         });
         io.to(request.roomId).emit("room-closed-by-host");
         rooms.delete(request.roomId);
-        await deleteHyperbeamSession(room.sessionId);
+        deleteHyperbeamSession(room.sessionId).catch((e) => console.warn(e));
       }
       io.to(request.requesterSocketId).emit("close-request-response", { approved: true });
     } else {

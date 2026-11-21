@@ -397,8 +397,10 @@ closeOldAndCreateBtn.addEventListener("click", () => {
     if (approved) {
       activeRoomModal.classList.add("hidden");
       clearSavedRoom();
-      showToast("🎉 Host approved! Creating your new party room...");
-      executeCreateRoom(targetRoomId);
+      showToast("🎉 Host approved! Starting your new party room...");
+      setTimeout(() => {
+        executeCreateRoom(targetRoomId);
+      }, 1200);
     } else {
       showToast(reason || "❌ Request denied by host.");
     }
@@ -695,12 +697,13 @@ function initSocket(roomId, username, isHost) {
       socket.emit("respond-close-request", { requestId: incomingRequestId, approved: true });
       incomingRequestId = null;
     }
+    // Instantly close room on Device A and return to lobby
+    teardownCurrentRoom("You approved closing this party room.");
   };
 
   // If room was closed by host approval
   socket.on("room-closed-by-host", () => {
-    alert("This watch room was closed to start a new session.");
-    location.reload();
+    teardownCurrentRoom("This watch room was closed to start a new session.");
   });
 }
 
@@ -770,22 +773,30 @@ controlToggleBtn.addEventListener("click", () => {
   });
 });
 
+// Gracefully exit and teardown the active room
+function teardownCurrentRoom(message) {
+  clearSavedRoom();
+  if (hbInstance) {
+    try { hbInstance.destroy(); } catch {}
+    hbInstance = null;
+  }
+  if (socket) {
+    try { socket.disconnect(); } catch {}
+    socket = null;
+  }
+  currentRoom = null;
+  window.location.hash = "";
+  roomView.classList.add("hidden");
+  lobbyView.classList.remove("hidden");
+  if (message) {
+    showToast(message);
+  }
+}
+
 // Leave Room
 leaveRoomBtn.addEventListener("click", () => {
   if (confirm("Are you sure you want to leave the watch party?")) {
-    clearSavedRoom();
-    if (hbInstance) {
-      hbInstance.destroy();
-      hbInstance = null;
-    }
-    if (socket) {
-      socket.disconnect();
-      socket = null;
-    }
-    currentRoom = null;
-    window.location.hash = "";
-    roomView.classList.add("hidden");
-    lobbyView.classList.remove("hidden");
+    teardownCurrentRoom();
   }
 });
 
