@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: cineparty
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: HYPERBEAM_API_KEY
+        sync: false
